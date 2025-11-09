@@ -22,10 +22,12 @@ def ler_palavras_txt(arquivo_txt):
                 palavras.add(palavra_limpa)
     return palavras
 
+
 def comparar_pdfs_excel(arquivos_concurso, arquivos_comparar, arquivo_txt=None):
     """
     Compara os PDFs do concurso e/ou palavras de um TXT com os PDFs de equipamentos
     e gera um Excel em memória indicando palavras em comum e exclusivas.
+    Cada ocorrência em cada PDF de equipamento será registrada separadamente.
 
     Parâmetros:
         arquivos_concurso: lista de PDFs do concurso
@@ -49,48 +51,40 @@ def comparar_pdfs_excel(arquivos_concurso, arquivos_comparar, arquivo_txt=None):
 
     dados_excel = []
 
+    # Itera sobre todos os PDFs de equipamento
     for ficheiro in arquivos_comparar:
         nome_arquivo = ficheiro.name
         palavras_equipamento = extrair_palavras_pdf_com_posicao(ficheiro)
-        set_equipamento = set([p["palavra"] for p in palavras_equipamento])
 
-        em_comum = set_equipamento & set_concurso
-        apenas_equipamento = set_equipamento - set_concurso
-        apenas_concurso = set_concurso - set_equipamento
+        # Cria lista de palavras em equipamento
+        lista_equipamento = [p["palavra"] for p in palavras_equipamento]
 
-        # Palavras em comum
-        for palavra in em_comum:
-            ocorrencia_equip = next(p for p in palavras_equipamento if p["palavra"] == palavra)
+        # Percorre todas as palavras do equipamento e marca o status
+        for ocorrencia_equip in palavras_equipamento:
+            palavra = ocorrencia_equip["palavra"]
+            if palavra in set_concurso:
+                status = "Em comum"
+            else:
+                status = "Apenas no equipamento"
             dados_excel.append({
                 "PDF_Equipamento": nome_arquivo,
                 "Palavra": palavra,
-                "Status": "Em comum",
+                "Status": status,
                 "Página": ocorrencia_equip["pagina"],
                 "Linha": ocorrencia_equip["linha"]
             })
 
-        # Palavras apenas no equipamento
-        for palavra in apenas_equipamento:
-            ocorrencia_equip = next(p for p in palavras_equipamento if p["palavra"] == palavra)
-            dados_excel.append({
-                "PDF_Equipamento": nome_arquivo,
-                "Palavra": palavra,
-                "Status": "Apenas no equipamento",
-                "Página": ocorrencia_equip["pagina"],
-                "Linha": ocorrencia_equip["linha"]
-            })
-
-        # Palavras apenas no concurso/TXT
-        for palavra in apenas_concurso:
-            # Tenta achar ocorrência no PDF do concurso (se existir)
-            ocorrencia_concurso = next((p for p in palavras_concurso if p["palavra"] == palavra), {"pagina": None, "linha": None})
-            dados_excel.append({
-                "PDF_Equipamento": nome_arquivo,
-                "Palavra": palavra,
-                "Status": "Apenas no concurso/TXT",
-                "Página": ocorrencia_concurso["pagina"],
-                "Linha": ocorrencia_concurso["linha"]
-            })
+        # Adiciona palavras do concurso/TXT que não apareceram no PDF de equipamento
+        for palavra in set_concurso:
+            if palavra not in lista_equipamento:
+                ocorrencia_concurso = next((p for p in palavras_concurso if p["palavra"] == palavra), {"pagina": None, "linha": None})
+                dados_excel.append({
+                    "PDF_Equipamento": nome_arquivo,
+                    "Palavra": palavra,
+                    "Status": "Apenas no concurso/TXT",
+                    "Página": ocorrencia_concurso["pagina"],
+                    "Linha": ocorrencia_concurso["linha"]
+                })
 
     # Cria o Excel em memória
     df = pd.DataFrame(dados_excel)
