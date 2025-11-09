@@ -1,0 +1,78 @@
+import pdfplumber
+import os
+import pandas as pd
+
+# === CONFIGURAÇÃO DAS PASTAS ===
+PASTA_CONCURSO = "pdfs/ficheirosConcurso"
+PASTA_COMPARAR = "pdfs/comparar"
+PASTA_RESULTADO = "pdfs/resultado"
+
+os.makedirs(PASTA_RESULTADO, exist_ok=True)
+
+# === FUNÇÃO PARA EXTRair PALAVRAS DE UM PDF ===
+def extrair_palavras_pdf(caminho_pdf):
+    palavras = set()
+    with pdfplumber.open(caminho_pdf) as pdf:
+        for pagina in pdf.pages:
+            texto = pagina.extract_text()
+            if texto:
+                for palavra in texto.lower().split():
+                    palavra_limpa = palavra.strip(".,;:!?()[]{}\"'")  # remove pontuação
+                    if palavra_limpa:
+                        palavras.add(palavra_limpa)
+    return palavras
+
+# === CARREGA TODAS AS PALAVRAS DO CONCURSO ===
+def carregar_palavras_concurso():
+    todas_palavras = set()
+    for ficheiro in os.listdir(PASTA_CONCURSO):
+        if ficheiro.endswith(".pdf"):
+            caminho = os.path.join(PASTA_CONCURSO, ficheiro)
+            todas_palavras |= extrair_palavras_pdf(caminho)
+    return todas_palavras
+
+# === PROCESSA COMPARAÇÃO DOS PDFs E GERA EXCEL ===
+def comparar_pdfs_excel():
+    palavras_concurso = carregar_palavras_concurso()
+    dados_excel = []
+
+    for ficheiro in os.listdir(PASTA_COMPARAR):
+        if ficheiro.endswith(".pdf"):
+            caminho = os.path.join(PASTA_COMPARAR, ficheiro)
+            palavras_equipamento = extrair_palavras_pdf(caminho)
+
+            em_comum = palavras_equipamento & palavras_concurso
+            so_no_equipamento = palavras_equipamento - palavras_concurso
+            so_no_concurso = palavras_concurso - palavras_equipamento
+
+            # Adiciona palavras em comum
+            for palavra in em_comum:
+                dados_excel.append({
+                    "PDF_Equipamento": ficheiro,
+                    "Palavra": palavra,
+                    "Status": "Em comum"
+                })
+            # Adiciona palavras apenas no equipamento
+            for palavra in so_no_equipamento:
+                dados_excel.append({
+                    "PDF_Equipamento": ficheiro,
+                    "Palavra": palavra,
+                    "Status": "Apenas no equipamento"
+                })
+            # Adiciona palavras apenas no concurso
+            for palavra in so_no_concurso:
+                dados_excel.append({
+                    "PDF_Equipamento": ficheiro,
+                    "Palavra": palavra,
+                    "Status": "Apenas no concurso"
+                })
+
+    # Gera DataFrame
+    df = pd.DataFrame(dados_excel)
+    caminho_excel = os.path.join(PASTA_RESULTADO, "resultado_geral.xlsx")
+    df.to_excel(caminho_excel, index=False)
+    print(f"✅ Comparação concluída. Excel criado: {caminho_excel}")
+
+# === EXECUÇÃO ===
+if __name__ == "__main__":
+    comparar_pdfs_excel()
